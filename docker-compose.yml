@@ -1,0 +1,38 @@
+version: "3"
+
+networks:
+  dev:
+
+volumes:
+  data:
+
+services:
+  btc:
+    container_name: btc
+    build:
+      context: .
+      dockerfile: ./docker/dev.Dockerfile
+    volumes:
+      - ./src:/app/src
+    environment:
+      BCOIN_API_KEY: secretpw
+      BCOIN_NETWORK: regtest
+      BCOIN_HOST: bcoin
+    depends_on:
+      - bcoin
+    networks:
+      - dev
+
+  bcoin:
+    container_name: bcoin
+    hostname: localhost
+    build:
+      context: ./bcoin
+    ports:
+      - 48444:48444
+      - 48332:48332 # RPC
+      - 48334:48334 # Wallet
+    logging:
+      driver: none
+    networks:
+      - dev
