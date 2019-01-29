@@ -70,7 +70,7 @@ class Usecase {
   }
 
   async fetchFees() {
-    const result = await this.nodeClient.execute('estimatesmartfee', [ 1 ])
+    const result = await this.nodeClient.execute('estimatesmartfee', [ 2 ])
     console.log(result)
     return {}
   }

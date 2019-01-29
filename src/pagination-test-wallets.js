@@ -10,7 +10,7 @@ module.exports = async (nodeClient, walletClient) => {
   // Miner primary/default then evenly disperses
   // all funds to other wallet accounts
 
-  const numTxBlocks = 10; // How many blocks to randomly fill with txs
+  const numTxBlocks = 100; // How many blocks to randomly fill with txs
   const numTxPerBlock = 10; // How many txs to try to put in each block
   // (due to the random tx-generation, some txs will fail due to lack of funds)
 
@@ -73,7 +73,7 @@ module.exports = async (nodeClient, walletClient) => {
   const primary = walletClient.wallet('primary');
   const minerReceive = await primary.createAddress('default');
 
-  await nodeClient.execute('generatetoaddress', [numInitBlocks, minerReceive.address]);  
+  await nodeClient.execute('generatetoaddress', [numInitBlocks, minerReceive.address]);
 
   console.log('Air-dropping funds to the people...');
   const balance = await primary.getBalance('default');
@@ -94,14 +94,18 @@ module.exports = async (nodeClient, walletClient) => {
     }
   }
 
+  try {
   await primary.send({
     outputs: outputs,
     rate: feeRate,
     subtractFee: true
   });
+  } catch (e) {
+    console.log('Error send funds: ', e.message);
+  }
 
   console.log('Confirming airdrop...');
-  await nodeClient.execute('generatetoaddress', [1, minerReceive.address]);  
+  await nodeClient.execute('generatetoaddress', [1, minerReceive.address]);
 
   console.log('Creating a big mess!...');
   for (let b = 0; b < numTxBlocks; b++) {
@@ -139,7 +143,7 @@ module.exports = async (nodeClient, walletClient) => {
     }
 
     // CONFIRM
-  await nodeClient.execute('generatetoaddress', [1, minerReceive.address]);  
+    await nodeClient.execute('generatetoaddress', [1, minerReceive.address]);
   }
 
   console.log('All done! Go play.');
