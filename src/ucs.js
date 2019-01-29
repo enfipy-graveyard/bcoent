@@ -52,7 +52,7 @@ class Usecase {
 
         console.log('Confirmed address:', receiver.address)
       } else {
-        console.log('Not primary wallet:', confirmed)
+        // console.log('Not primary wallet:', confirmed)
       }
     })
   }

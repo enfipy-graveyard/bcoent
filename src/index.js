@@ -2,7 +2,7 @@ require('module-alias/register')
 
 const usecase = require('@/ucs')
 const initBcoin = require('@/bcoin')
-const test = require('@/pagination-test-wallets')
+const test = require('@/test')
 
 
 const start = async () => {
