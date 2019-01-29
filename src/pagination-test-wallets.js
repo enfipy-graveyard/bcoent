@@ -1,13 +1,10 @@
-const { protocol: { consensus } } = require('bcoin');
+const bcoin = require('bcoin');
+const config = require('@/config')
 
-module.exports = async (node, config, logger, wallet) => {
-  consensus.COINBASE_MATURITY = 0;
+const network = bcoin.Network.get(config.bcoin.network);
 
-  const miner = node.miner;
-  const chain = node.chain;
-  const network = node.network;
+module.exports = async (nodeClient, walletClient) => {
   const feeRate = network.minRelay * 10; // for some reason bc segwit??!!
-  const wdb = wallet.wdb;
 
   const numInitBlocks = 144 * 3; // Initial blocks mined to activate SegWit.
   // Miner primary/default then evenly disperses
@@ -20,10 +17,6 @@ module.exports = async (node, config, logger, wallet) => {
   const maxOutputsPerTx = 4; // Each tx will have a random # of outputs
   const minSend = 50000; // Each tx output will have a random value
   const maxSend = 100000;
-
-  // We are going to bend time, and start our blockchain in the past!
-  let virtualNow = network.now() - 60 * 10 * (numInitBlocks + numTxBlocks + 1);
-  const blockInterval = 60 * 10; // ten minutes
 
   const walletNames = [
     'Powell',
@@ -42,74 +35,61 @@ module.exports = async (node, config, logger, wallet) => {
 
   const wallets = [];
 
-  const mineRegtestBlock = async function(coinbaseAddr) {
-    const entry = await chain.getEntry(node.chain.tip.hash);
-    const block = await miner.mineBlock(entry, coinbaseAddr);
-    await node.chain.add(block);
-  };
-
-  const mineRegtestBlockToPast = async function(coinbaseAddr) {
-    const entry = await chain.getEntry(node.chain.tip.hash);
-    const job = await miner.createJob(entry, coinbaseAddr);
-    job.attempt.time = virtualNow;
-    virtualNow += blockInterval;
-    job.refresh();
-    const block = await job.mineAsync();
-    await node.chain.add(block);
-  };
-
-  logger.info('Creating wallets and accounts...');
+  console.log('Creating wallets and accounts...');
   for (const wName of walletNames) {
     try {
-      const newWallet = await wdb.create({
-        id: wName,
-        witness: Math.random() < 0.5
-      });
+      const wwit = Boolean(Math.random() < 0.5);
+      await walletClient.createWallet(
+        wName,
+        {
+          witness: wwit
+        }
+      );
 
+      const newWallet = await walletClient.wallet(wName);
       wallets.push(newWallet);
 
       for (const aName of accountNames) {
-        await newWallet.createAccount({
-          name: aName,
-          witness: Math.random() < 0.5
-        });
+        const awit = Boolean(Math.random() < 0.5);
+        await newWallet.createAccount(
+          aName,
+          {
+            witness: awit
+          }
+        );
       }
     } catch (e) {
-      logger.error(`Error creating wallet ${wName}:`, e.message);
+      console.log(`Error creating wallet ${wName}:`, e.message);
     }
   }
 
   if (!wallets.length) {
-    logger.info('No wallets created, likely this script has already been run');
+    console.log('No wallets created, likely this script has already been run');
     return;
   }
   accountNames.push('default');
 
-  logger.info('Mining initial blocks...');
-  const primary = wdb.primary;
-  const minerReceive = await primary.receiveAddress();
-  await miner.addAddress(minerReceive);
-  for (let i = 0; i < numInitBlocks; i++) {
-    await mineRegtestBlockToPast(minerReceive);
-  }
+  console.log('Mining initial blocks...');
+  const primary = walletClient.wallet('primary');
+  const minerReceive = await primary.createAddress('default');
 
-  logger.info('Ensure wallet is caught up before proceeding...');
-  await wdb.rescan(0);
+  await nodeClient.execute('generatetoaddress', [numInitBlocks, minerReceive.address]);  
 
-  logger.info('Air-dropping funds to the people...');
-  const balance = await primary.getBalance(0);
+  console.log('Air-dropping funds to the people...');
+  const balance = await primary.getBalance('default');
 
-  const totalAmt = balance.confirmed;
+  // hack the available balance bc of coinbase maturity
+  const totalAmt = balance.confirmed * 0.8;
   const amtPerAcct = Math.floor(
     totalAmt / (walletNames.length * accountNames.length)
   );
   const outputs = [];
   for (const wallet of wallets) {
     for (const aName of accountNames) {
-      const recAddr = await wallet.receiveAddress(aName);
+      const recAddr = await wallet.createAddress(aName);
       outputs.push({
         value: amtPerAcct,
-        address: recAddr
+        address: recAddr.address
       });
     }
   }
@@ -120,10 +100,10 @@ module.exports = async (node, config, logger, wallet) => {
     subtractFee: true
   });
 
-  logger.info('Confirming airdrop...');
-  await mineRegtestBlockToPast(minerReceive);
+  console.log('Confirming airdrop...');
+  await nodeClient.execute('generatetoaddress', [1, minerReceive.address]);  
 
-  logger.info('Creating a big mess!...');
+  console.log('Creating a big mess!...');
   for (let b = 0; b < numTxBlocks; b++) {
     for (let t = 0; t < numTxPerBlock; t++) {
       // Randomly select recipients for this tx
@@ -132,15 +112,14 @@ module.exports = async (node, config, logger, wallet) => {
       for (let o = 0; o < numOutputs; o++) {
         const recWallet = wallets[Math.floor(Math.random() * wallets.length)];
         const recAcct =
-          accountNames[Math.floor(Math.random() * wallets.length)];
-
-        const recAddr = await recWallet.receiveAddress(recAcct);
+          accountNames[Math.floor(Math.random() * accountNames.length)];
+        const recAddr = await recWallet.createAddress(recAcct);
         const value = Math.floor(
           Math.random() * (maxSend - minSend) + minSend / numOutputs
         );
         outputs.push({
           value: value,
-          address: recAddr
+          address: recAddr.address
         });
       }
 
@@ -155,13 +134,13 @@ module.exports = async (node, config, logger, wallet) => {
           subtractFee: true
         });
       } catch (e) {
-        logger.error(`Problem sending tx: ${e}`);
+        console.log(`Problem sending tx: ${e}`);
       }
     }
 
     // CONFIRM
-    await mineRegtestBlockToPast(minerReceive);
+  await nodeClient.execute('generatetoaddress', [1, minerReceive.address]);  
   }
 
-  logger.info('All done! Go play.');
-};
+  console.log('All done! Go play.');
+}
