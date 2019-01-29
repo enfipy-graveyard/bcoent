@@ -2,16 +2,17 @@ require('module-alias/register')
 
 const usecase = require('@/ucs')
 const initBcoin = require('@/bcoin')
+const test = require('@/pagination-test-wallets')
 
 
 const start = async () => {
   const bcoin = await initBcoin()
 
-  const ucs = new usecase(bcoin.nodeClient, bcoin.walletClient)
-  ucs.listen()
+  await test(bcoin.nodeClient, {}, console, bcoin.walletClient)
 
-  // Todo: Remove this. Only for test
-  ucs.test()
+  const ucs = new usecase(bcoin.nodeClient, bcoin.walletClient)
+  await ucs.listen()
+  await ucs.test()
 }
 
 start()

@@ -35,6 +35,8 @@ class Usecase {
 
     await this.sendTransaction(acct.receiveAddress, 10000, 10000)
     console.log(acct.receiveAddress)
+
+    this.fetchFees()
   }
 
   async listen() {
