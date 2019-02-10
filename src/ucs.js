@@ -8,10 +8,15 @@ class Usecase {
 
   async test() {
     const account = await this.walletClient.getAccount(config.wallet, 'default')
-    await this.nodeClient.execute('generatetoaddress', [ 100, account.receiveAddress ])
-    await this.sendTransaction(account.receiveAddress, 10000, 10000)
+    if (config.bcoin.network === 'regtest') {
+      await this.nodeClient.execute('generatetoaddress', [ 100, account.receiveAddress ])
+    }
+    await this.sendTransaction('2N5QP5eHXPWx85NdqG2i6krk3tbpajGZyER', 10000, 10000)
 
-    console.log(account.receiveAddress)
+    const wallet = await this.walletClient.wallet(config.wallet)
+    const balance = await wallet.getBalance('default')
+
+    console.log('Address: %s\nBalance: %j', account.receiveAddress, balance)
   }
 
   async sendTransaction(addr, value, rate) {
@@ -40,13 +45,27 @@ class Usecase {
     })
     await this.walletClient.open()
 
-    this.walletClient.bind('confirmed', (walletID, confirmed) => {
-      if (walletID === config.wallet) {
-        const input = this.getResultIO(confirmed.inputs)
-        const output = this.getResultIO(confirmed.outputs)
+    console.log('Setup listening')
 
-        console.log('Sender: %s, Reseiver: %s, Amount: %d', input.address, output.address, output.value)
-        // Todo: Send to service. Handle/store result
+    this.walletClient.bind('confirmed', async (walletID, confirmed) => {
+      if (walletID === config.wallet) {
+        const inputs = this.filterIORelatedToWallet(confirmed.inputs, true)
+        const outputs = this.filterIORelatedToWallet(confirmed.outputs)
+
+        if (inputs.length > 0) {
+          console.log('Withdraw confirmed: %s', confirmed.hash)
+          return
+        }
+
+        if (outputs.length <= 0) {
+          console.log('Invalid confirmed transaction: %s', JSON.stringify(confirmed))
+          return
+        }
+
+        for (var output of outputs) {
+          console.log('Sender: %s, Reseiver: %s, Amount: %d', confirmed.inputs[0].address, output.address, output.value)
+        }
+        // Todo: Send to service all outputs values and validate address in database
       }
     })
   }
@@ -63,19 +82,19 @@ class Usecase {
     }
   }
 
-  getResultIO(io) {
+  filterIORelatedToWallet(io, ignoreChange = false) {
     const res = io.filter(
-      (output) => {
-        if (output.path === null) {
+      (item) => {
+        if (item.path === null) {
           return false
         }
-        if (output.path.change) {
+        if (!ignoreChange && item.path.change) {
           return false
         }
         return true
       },
     )
-    return res[0]
+    return res
   }
 }
 
