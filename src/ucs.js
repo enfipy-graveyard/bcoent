@@ -1,4 +1,5 @@
 const config = require('@/config')
+const helpers = require('@/helpers')
 
 class Usecase {
   constructor(nodeClient, walletClient) {
@@ -17,6 +18,20 @@ class Usecase {
     const balance = await wallet.getBalance('default')
 
     console.log('Address: %s\nBalance: %j', account.receiveAddress, balance)
+  }
+
+  async rescanIfEnvPassed() {
+    if (!config.bcoin.rescan) {
+      return
+    }
+    const height = helpers.getHeight()
+    const result = await this.walletClient.rescan(height)
+    if (result.success) {
+      console.log(`Successfully rolled back to the ${height} height`)
+    } else {
+      console.log('Failed to roll back')
+      process.exit(1)
+    }
   }
 
   async sendTransaction(addr, value, rate) {
@@ -63,7 +78,7 @@ class Usecase {
         }
 
         for (var output of outputs) {
-          console.log('Sender: %s, Reseiver: %s, Amount: %d', confirmed.inputs[0].address, output.address, output.value)
+          console.log('Sender: %s, Receiver: %s, Amount: %d', confirmed.inputs[0].address, output.address, output.value)
         }
         // Todo: Send to service all outputs values and validate address in database
       }

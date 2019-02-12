@@ -103,3 +103,6 @@ typings/
 
 # FuseBox cache
 .fusebox/
+
+# Bcoin config
+config.json
