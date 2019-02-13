@@ -69,6 +69,7 @@ class Usecase {
 
         if (inputs.length > 0) {
           console.log('Withdraw confirmed: %s', confirmed.hash)
+          helpers.setHeight(confirmed.height)
           return
         }
 
@@ -78,9 +79,11 @@ class Usecase {
         }
 
         for (var output of outputs) {
-          console.log('Sender: %s, Receiver: %s, Amount: %d', confirmed.inputs[0].address, output.address, output.value)
+          console.log('Hash: %s, Sender: %s, Receiver: %s, Amount: %d', confirmed.hash, confirmed.inputs[0].address, output.address, output.value)
+          // Todo: Send to service value and validate sender and receiver addresses in database
         }
-        // Todo: Send to service all outputs values and validate address in database
+
+        helpers.setHeight(confirmed.height)
       }
     })
   }
