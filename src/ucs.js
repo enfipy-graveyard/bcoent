@@ -1,3 +1,6 @@
+const moment = require('moment')
+const sb = require('satoshi-bitcoin')
+
 const config = require('@/config')
 const helpers = require('@/helpers')
 
@@ -8,6 +11,10 @@ class Usecase {
   }
 
   async test() {
+    if (config.bcoin.network === 'mainnet') {
+      return
+    }
+
     const account = await this.walletClient.getAccount(config.wallet, 'default')
     if (config.bcoin.network === 'regtest') {
       await this.nodeClient.execute('generatetoaddress', [ 100, account.receiveAddress ])
@@ -24,8 +31,10 @@ class Usecase {
     if (!config.bcoin.rescan) {
       return
     }
+
     const height = helpers.getHeight()
     const result = await this.walletClient.rescan(height)
+
     if (result.success) {
       console.log(`Successfully rolled back to the ${height} height`)
     } else {
@@ -43,7 +52,11 @@ class Usecase {
       }],
     }
     const tx = await this.walletClient.send(config.wallet, options)
-    return tx
+
+    return {
+      hash: tx.hash,
+      date: moment(tx.mdate, 'YYYY-MM-DDTHH:mm:ssZ').unix(),
+    }
   }
 
   async genAddress() {
@@ -64,7 +77,7 @@ class Usecase {
 
     this.walletClient.bind('confirmed', async (walletID, confirmed) => {
       if (walletID === config.wallet) {
-        const inputs = this.filterIORelatedToWallet(confirmed.inputs, true)
+        const inputs = this.filterIORelatedToWallet(confirmed.inputs, false)
         const outputs = this.filterIORelatedToWallet(confirmed.outputs)
 
         if (inputs.length > 0) {
@@ -94,19 +107,27 @@ class Usecase {
     const economic = await this.nodeClient.execute('estimatesmartfee', [ 12 ])
 
     return {
-      economic,
-      normal,
-      priority,
+      priority: sb.toSatoshi(priority.fee),
+      normal: sb.toSatoshi(normal.fee),
+      economic: sb.toSatoshi(economic.fee),
     }
   }
 
-  filterIORelatedToWallet(io, ignoreChange = false) {
+  async healthCheck() {
+    const result = await this.nodeClient.getInfo()
+    if (!result) {
+      return false
+    }
+    return true
+  }
+
+  filterIORelatedToWallet(io, ignoreChange = true) {
     const res = io.filter(
       (item) => {
         if (item.path === null) {
           return false
         }
-        if (!ignoreChange && item.path.change) {
+        if (ignoreChange && item.path.change) {
           return false
         }
         return true
