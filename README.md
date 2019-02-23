@@ -17,5 +17,4 @@ docker-compose up --build
 
 ## Todo:
 
-1) Implement [script](https://github.com/bpanel-org/bpanel/pull/167) to be able run `estimatesmartfee` with value. `fee: -1`
-2) Fix issue where you need to reload app to make transaction. `Error: Not enough funds`
+1) Test implementation on mainnet
